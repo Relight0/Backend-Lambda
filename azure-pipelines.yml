@@ -1,0 +1,58 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - lambda.yml
+
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Build
+        pool:
+          vmImage: ubuntu-latest
+
+        steps:
+          - script: |
+              zip $(Build.ArtifactStagingDirectory)/index.zip *.mjs
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+              ArtifactName: 'lambda'
+              publishLocation: 'Container'
+  - stage: Deployment
+    jobs:
+      - job: Deployment
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: DownloadBuildArtifacts@1
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'lambda'
+              downloadPath: '$(System.ArtifactsDirectory)'
+          - task: S3Upload@1
+            inputs:
+              awsCredentials: 'AWS'
+              regionName: 'us-east-2'
+              bucketName: 'mybucket-lambda-webstatic-retofinal-miguel'
+              sourceFolder: '$(System.ArtifactsDirectory)/lambda'
+              globExpressions: '**'
+              createBucket: true 
+          - task: LambdaDeployFunction@1
+            inputs:
+              awsCredentials: 'AWS'
+              regionName: 'us-east-2'
+              deploymentMode: 'codeonly'
+              functionName: 'lambda_function_products'
+              codeLocation: 's3object'
+              s3Bucket: 'mybucket-lambda-webstatic-retofinal-miguel'
+              s3ObjectKey: 'index.zip'
